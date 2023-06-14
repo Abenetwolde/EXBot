@@ -8,7 +8,7 @@ const bot = new Telegraf("6141908433:AAH44pcDhKSYKk853mKl2RgL7jmG3aSfRoc");
 const motivationScene = new Scenes.WizardScene(
     'motivation',
     async (ctx) => {
-        const response = await axios.get('https://type.fit/api/quotes');
+        const response = await fetch('https://type.fit/api/quotes');
         const data = await response.json();
         ctx.reply(data.quote);
         ctx.scene.leave();
@@ -24,11 +24,13 @@ const quizScene = new Scenes.WizardScene(
             ['Paris', 'London', 'Berlin', 'Madrid'],
             { is_anonymous: false, allows_multiple_answers: false }
           );
+          return ctx.wizard.next();
         });
         quizScene.on('poll_answer', (ctx) => {
           // Check if the user selected the correct answer
           if (ctx.pollAnswer.option_ids[0] === 0) {
             ctx.reply('Congratulations! You are correct.');
+            ctx.scene.leave();;;
           } else {
             // ctx.replyWithAnimation('<URL>');
             ctx.reply(
@@ -37,12 +39,18 @@ const quizScene = new Scenes.WizardScene(
                 Markup.callbackButton('View Answer', 'view_answer'),
               ]).extra()
             );
+            ctx.scene.leave();;;
           }
         });
         quizScene.action('view_answer', (ctx) => {
           ctx.answerCbQuery();
           ctx.editMessageText('The correct answer is Paris.');
-        });;
+          ctx.scene.leave();;;
+        }
+        
+
+        )
+      
 
 
 // Create a stage to manage all scenes
@@ -52,6 +60,7 @@ bot.use(stage.middleware());
 
 // Show menu button when user starts the bot
 bot.start((ctx) => {
+    
   ctx.reply(
     'Welcome to the Quiz Bot!',
     Markup.keyboard([
