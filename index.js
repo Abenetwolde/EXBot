@@ -1,67 +1,91 @@
-const { Telegraf, Markup, Scenes, session } = require('telegraf');
 
+const { Telegraf, Markup,  Scene, session, WizardScene,Scenes } = require('telegraf');
 
+const { Stage } = Scenes;
 const bot = new Telegraf("6141908433:AAH44pcDhKSYKk853mKl2RgL7jmG3aSfRoc");
 
-// Create product list
-const products = [
-  { name: 'Product 1', price: 10, image: 'image1.jpg' },
-  { name: 'Product 2', price: 20, image: 'image2.jpg' },
-  { name: 'Product 3', price: 30, image: 'image3.jpg' }
-];
 
-// Create cart
-let cart = [];
+const motivationScene = new Scenes.WizardScene(
+    'motivation',
+    async (ctx) => {
+        const response = await axios.get('https://type.fit/api/quotes');
+        const data = await response.json();
+        ctx.reply(data.quote);
+        ctx.scene.leave();
+    }
+)
+// Scene for getting a random quiz
 
-// Create product selection keyboard
-const productKeyboard = Markup.inlineKeyboard(
-  products.map(product => Markup.button.callback(product.name, `add_${product.name}`))
-);
+const quizScene = new Scenes.WizardScene(
+    'quiz',
+    async (ctx) => {
+        ctx.replyWithPoll(
+            'What is the capital of France?',
+            ['Paris', 'London', 'Berlin', 'Madrid'],
+            { is_anonymous: false, allows_multiple_answers: false }
+          );
+        });
+        quizScene.on('poll_answer', (ctx) => {
+          // Check if the user selected the correct answer
+          if (ctx.pollAnswer.option_ids[0] === 0) {
+            ctx.reply('Congratulations! You are correct.');
+          } else {
+            // ctx.replyWithAnimation('<URL>');
+            ctx.reply(
+              'Sorry, that is not correct. The correct answer is Paris.',
+              Markup.inlineKeyboard([
+                Markup.callbackButton('View Answer', 'view_answer'),
+              ]).extra()
+            );
+          }
+        });
+        quizScene.action('view_answer', (ctx) => {
+          ctx.answerCbQuery();
+          ctx.editMessageText('The correct answer is Paris.');
+        });;
 
-// Handle start command
-bot.start(ctx => {
+
+// Create a stage to manage all scenes
+const stage = new Stage([motivationScene , quizScene]);
+bot.use(session());
+bot.use(stage.middleware());
+
+// Show menu button when user starts the bot
+bot.start((ctx) => {
   ctx.reply(
-    'Welcome to our e-commerce store! What would you like to do?',
-    Markup.keyboard(['View Products', 'View Cart', 'Checkout']).resize()
+    'Welcome to the Quiz Bot!',
+    Markup.keyboard([
+      ['/help', '/motivation'],
+      ['/quiz', '/stats'],
+    ])
+      .oneTime()
+      .resize()
+    //   .extra()
   );
 });
 
-// Handle view products
-bot.hears('View Products', ctx => {
-  ctx.reply('Here are our available products:', productKeyboard);
+// Respond to /help command
+bot.command('help', (ctx) => {
+  ctx.reply(
+    'Here are some commands you can use:\n/help - Get additional help\n/motivation - Get a motivational quote\n/quiz - Get a random quiz\n/stats - See how many users are using the bot'
+  );
 });
 
-// Handle add to cart
-bot.action(/add_(.+)/, ctx => {
-  const productName = ctx.match[1];
-  const product = products.find(p => p.name === productName);
-  cart.push(product);
-  ctx.answerCbQuery(`Added ${productName} to cart`);
+// Respond to /motivation command
+bot.command('motivation', (ctx) => {
+  ctx.scene.enter('motivation');
 });
 
-// Handle view cart
-bot.hears('View Cart', ctx => {
-  if (cart.length === 0) {
-    ctx.reply('Your cart is empty');
-    return;
-  }
-
-  let message = 'Your cart contains:\n';
-  cart.forEach(product => {
-    message += `${product.name} - $${product.price}\n`;
-  });
-  ctx.reply(message);
+// Respond to /quiz command
+bot.command('quiz', (ctx) => {
+  ctx.scene.enter('quiz');
 });
 
-// Handle checkout
-bot.hears('Checkout', ctx => {
-  if (cart.length === 0) {
-    ctx.reply('Your cart is empty');
-    return;
-  }
-
-  let total = cart.reduce((sum, product) => sum + product.price, 0);
-  ctx.reply(`Your total is $${total}. Please enter your shipping information:`);
+// Respond to /stats command
+bot.command('stats', (ctx) => {
+  // Get the number of users who have started the bot
+  const userCount = Object.keys(bot.context.db.users).length;
+  ctx.reply(`There are ${userCount} users using this bot.`);
 });
 
 bot.launch();
